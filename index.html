@@ -49,9 +49,6 @@
   .toolbar { display: flex; align-items: center; gap: 16px; padding: 16px 24px; flex-wrap: wrap; position: sticky; top: 0; background: rgba(18,18,18,.92); backdrop-filter: blur(8px); z-index: 2; }
   .bigplay { width: 56px; height: 56px; border-radius: 50%; background: var(--accent); color: #000; font-size: 22px; }
   .bigplay:hover { transform: scale(1.05); }
-  .ghost { color: var(--muted); font-size: 22px; width: 40px; height: 40px; border-radius: 50%; }
-  .ghost:hover { color: var(--text); }
-  .ghost.on { color: var(--accent); }
   .add { border: 1px solid #727272; border-radius: 999px; padding: 8px 16px; font-weight: 700; font-size: 14px; cursor: pointer; }
   .add:hover { border-color: var(--text); transform: scale(1.03); }
   .search { margin-left: auto; background: var(--hover); border: 0; border-radius: 999px; padding: 10px 16px; color: var(--text); width: 220px; max-width: 100%; }
@@ -64,7 +61,7 @@
   .row .ttl { color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 500; }
   .row.cur .ttl, .row.cur .num { color: var(--accent); }
   .row .time { text-align: right; font-variant-numeric: tabular-nums; }
-  .row .more { opacity: 0; font-size: 18px; }
+  .row .more { opacity: 0; }
   .row:hover .more, .row .more:focus-visible { opacity: 1; }
   .row .pb { display: none; }
   .row.t:hover .num span { display: none; }
@@ -80,7 +77,6 @@
   .np .tt span { color: var(--muted); font-size: 12px; }
   .mid { display: grid; gap: 6px; }
   .ctrls { display: flex; justify-content: center; align-items: center; gap: 16px; }
-  .ctrls .ghost { font-size: 18px; }
   .pp { width: 36px; height: 36px; border-radius: 50%; background: var(--text); color: #000; font-size: 15px; }
   .pp:hover { transform: scale(1.06); }
   .seek { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
@@ -101,11 +97,56 @@
   .menu hr { border: 0; border-top: 1px solid #3e3e3e; margin: 4px 0; }
   .drop::after { content: "Отпустите файлы, чтобы добавить"; position: fixed; inset: 8px; border: 2px dashed var(--accent); border-radius: 12px; background: rgba(0,0,0,.7); display: grid; place-items: center; font-size: 24px; z-index: 20; }
 
+
+  /* ---------- иконки и кнопки ---------- */
+  .sv { width: 20px; height: 20px; flex: none; fill: currentColor; display: block; }
+  .sv.s { fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+  .sv.s.fill { fill: currentColor; }
+  i[data-ic] { display: inline-flex; }
+  .ghost { position: relative; display: grid; place-items: center; width: 40px; height: 40px; border-radius: 50%; color: var(--muted);
+           transition: color .15s, background .15s, transform .1s; }
+  .ghost:hover { color: var(--text); background: rgba(255,255,255,.08); }
+  .ghost:active { transform: scale(.9); }
+  .ghost.on { color: var(--accent); }
+  .ghost.on::after { content: ""; position: absolute; bottom: 3px; width: 4px; height: 4px; border-radius: 50%; background: var(--accent); }
+  .ghost.on:hover { background: rgba(30,215,96,.12); }
+  .bigplay, .pp { display: grid; place-items: center; transition: transform .12s, background .15s; }
+  .bigplay:hover { transform: scale(1.06); background: #3be477; }
+  .bigplay:active, .pp:active { transform: scale(.94); }
+  .bigplay .sv { width: 26px; height: 26px; }
+  .pp .sv { width: 18px; height: 18px; }
+  .ctrls .sv { width: 20px; height: 20px; }
+  .ctrls { gap: 12px; }
+  .nav button { align-items: center; }
+  .nav .sv { width: 22px; }
+  .logo .sv { width: 18px; height: 18px; stroke-width: 2.4; }
+  .lib-head span { display: flex; align-items: center; gap: 10px; }
+  .lib-head button { display: grid; place-items: center; }
+  .add { display: inline-flex; align-items: center; gap: 8px; transition: border-color .15s, transform .1s, background .15s; }
+  .add:hover { background: rgba(255,255,255,.06); }
+  .add .sv { width: 16px; height: 16px; }
+  .hero .big .sv { width: 72px; height: 72px; stroke-width: 1.5; }
+  .np .cv .sv { width: 26px; height: 26px; }
+  .pl .ic .sv { width: 22px; height: 22px; }
+  .row .time .sv { width: 16px; height: 16px; display: inline-block; vertical-align: middle; }
+  .row .num { display: grid; place-items: center; }
+  .row .pb .sv { width: 16px; height: 16px; }
+  .row .more { display: grid; place-items: center; width: 32px; height: 32px; border-radius: 50%; color: var(--muted); }
+  .row .more:hover { color: var(--text); background: rgba(255,255,255,.1); }
+  .row .more .sv { width: 18px; height: 18px; }
+  .menu button { display: flex; align-items: center; gap: 12px; }
+  .menu .sv { width: 16px; height: 16px; }
+  .menu .sv.s.fill { color: var(--accent); }
+  .eq rect { transform-box: fill-box; transform-origin: bottom; animation: eq .9s ease-in-out infinite; }
+  .eq rect:nth-child(2) { animation-delay: .2s; } .eq rect:nth-child(3) { animation-delay: .4s; }
+  @keyframes eq { 0%, 100% { transform: scaleY(.35); } 50% { transform: scaleY(1); } }
+  @media (prefers-reduced-motion: reduce) { .eq rect { animation: none; } * { transition: none !important; } }
+
   /* ---------- телефон ---------- */
   @media (max-width: 800px) {
     body { grid-template-columns: 1fr; grid-template-rows: auto 1fr auto; grid-template-areas: "side" "main" "bar"; padding: 8px 8px 0; }
     .side { flex-direction: row; overflow-x: auto; }
-    .side .brand, .nav { display: none; }
+    .side > .box:first-child { display: none; }
     .lib { flex-direction: row; align-items: center; padding: 8px; flex: none; }
     .lib-head { padding: 0 8px 0 0; }
     .pls { display: flex; overflow-x: auto; }
@@ -124,51 +165,51 @@
 <body>
 <aside class="side">
   <div class="box">
-    <div class="brand"><div class="logo">≋</div>Волна</div>
+    <div class="brand"><div class="logo"><i data-ic="wave"></i></div>Волна</div>
     <nav class="nav">
-      <button data-go="all" class="active">🏠 Все треки</button>
-      <button id="goSearch">🔍 Поиск</button>
+      <button data-go="all" class="active"><i data-ic="home"></i>Все треки</button>
+      <button id="goSearch"><i data-ic="search"></i>Поиск</button>
     </nav>
   </div>
   <div class="box lib">
-    <div class="lib-head"><span>📚 Моя медиатека</span><button id="newPl" title="Новый плейлист" aria-label="Новый плейлист">+</button></div>
+    <div class="lib-head"><span><i data-ic="library"></i>Моя медиатека</span><button id="newPl" title="Новый плейлист" aria-label="Новый плейлист"><i data-ic="plus"></i></button></div>
     <div class="pls" id="pls"></div>
   </div>
 </aside>
 
 <main class="main" id="main">
   <div class="hero" id="hero">
-    <div class="big" id="heroIc">🎵</div>
+    <div class="big" id="heroIc"><i data-ic="note"></i></div>
     <div><small id="heroKind">ПЛЕЙЛИСТ</small><h1 id="heroTitle">Все треки</h1><div class="info" id="heroInfo"></div></div>
   </div>
   <div class="toolbar">
-    <button class="bigplay" id="bigPlay" aria-label="Воспроизвести">▶</button>
-    <button class="ghost" id="shuffle" title="Перемешать" aria-label="Перемешать">🔀</button>
-    <label class="add">+ Добавить файлы<input type="file" id="files" accept="audio/*,.mp3,.m4a,.aac,.wav,.ogg,.opus,.flac" multiple></label>
+    <button class="bigplay" id="bigPlay" aria-label="Воспроизвести"><i data-ic="play"></i></button>
+    <button class="ghost" id="shuffle" title="Перемешать" aria-label="Перемешать"><i data-ic="shuffle"></i></button>
+    <label class="add"><i data-ic="plus"></i>Добавить файлы<input type="file" id="files" accept="audio/*,.mp3,.m4a,.aac,.wav,.ogg,.opus,.flac" multiple></label>
     <input class="search" id="q" type="search" placeholder="Поиск в списке" aria-label="Поиск">
   </div>
-  <div class="row head"><span class="num">#</span><span>Название</span><span class="time">⏱</span><span></span></div>
+  <div class="row head"><span class="num">#</span><span>Название</span><span class="time"><i data-ic="clock"></i></span><span></span></div>
   <div id="rows"></div>
   <div class="empty" id="empty"></div>
 </main>
 
 <footer class="bar">
   <div class="np">
-    <div class="cv" id="cv">🎵</div>
+    <div class="cv" id="cv"><i data-ic="note"></i></div>
     <div class="tt"><b id="npTitle">Ничего не играет</b><span id="npSub">Добавьте музыку</span></div>
-    <button class="ghost" id="like" title="Нравится" aria-label="Нравится">♡</button>
+    <button class="ghost" id="like" title="Нравится" aria-label="Нравится"><i data-ic="heart"></i></button>
   </div>
   <div class="mid">
     <div class="ctrls">
-      <button class="ghost" id="shuffle2" title="Перемешать" aria-label="Перемешать">🔀</button>
-      <button class="ghost" id="prev" title="Назад" aria-label="Назад">⏮</button>
-      <button class="pp" id="play" aria-label="Играть или пауза">▶</button>
-      <button class="ghost" id="next" title="Вперёд" aria-label="Вперёд">⏭</button>
-      <button class="ghost" id="repeat" title="Повтор" aria-label="Повтор">🔁</button>
+      <button class="ghost" id="shuffle2" title="Перемешать" aria-label="Перемешать"><i data-ic="shuffle"></i></button>
+      <button class="ghost" id="prev" title="Назад" aria-label="Назад"><i data-ic="prev"></i></button>
+      <button class="pp" id="play" aria-label="Играть или пауза"><i data-ic="play"></i></button>
+      <button class="ghost" id="next" title="Вперёд" aria-label="Вперёд"><i data-ic="next"></i></button>
+      <button class="ghost" id="repeat" title="Повтор" aria-label="Повтор"><i data-ic="repeat"></i></button>
     </div>
     <div class="seek"><span id="cur">0:00</span><input type="range" id="seek" min="0" max="1000" value="0" aria-label="Перемотка"><span id="dur">0:00</span></div>
   </div>
-  <div class="right"><button class="ghost" id="mute" aria-label="Звук">🔊</button><input type="range" id="vol" min="0" max="100" value="80" aria-label="Громкость"></div>
+  <div class="right"><button class="ghost" id="mute" aria-label="Звук"><i data-ic="vol"></i></button><input type="range" id="vol" min="0" max="100" value="80" aria-label="Громкость"></div>
 </footer>
 
 <audio id="audio"></audio>
@@ -177,6 +218,33 @@
 (() => {
   const $ = id => document.getElementById(id);
   const audio = $('audio');
+  const PATHS = {
+    play: '<path d="M8 5.5v13a1 1 0 0 0 1.5.86l10.5-6.5a1 1 0 0 0 0-1.72L9.5 4.64A1 1 0 0 0 8 5.5z"/>',
+    pause: '<rect x="6" y="5" width="4.5" height="14" rx="1.2"/><rect x="13.5" y="5" width="4.5" height="14" rx="1.2"/>',
+    prev: '<rect x="5" y="5" width="2.5" height="14" rx="1"/><path d="M19 6.2v11.6a.8.8 0 0 1-1.3.6L9.4 12.6a.8.8 0 0 1 0-1.2l8.3-5.8a.8.8 0 0 1 1.3.6z"/>',
+    next: '<rect x="16.5" y="5" width="2.5" height="14" rx="1"/><path d="M5 6.2v11.6a.8.8 0 0 0 1.3.6l8.3-5.8a.8.8 0 0 0 0-1.2L6.3 5.6A.8.8 0 0 0 5 6.2z"/>',
+    shuffle: '<path d="M16 3h5v5"/><path d="M4 20 21 3"/><path d="M21 16v5h-5"/><path d="m15 15 6 6"/><path d="m4 4 5 5"/>',
+    repeat: '<path d="m17 2 4 4-4 4"/><path d="M3 11v-1a4 4 0 0 1 4-4h14"/><path d="m7 22-4-4 4-4"/><path d="M21 13v1a4 4 0 0 1-4 4H3"/>',
+    heart: '<path d="M12 20.5s-8.5-5-8.5-11A4.8 4.8 0 0 1 12 6.8a4.8 4.8 0 0 1 8.5 2.7c0 6-8.5 11-8.5 11z"/>',
+    vol: '<path d="M11 5 6.5 9H3v6h3.5L11 19z"/><path d="M15.5 9a4.2 4.2 0 0 1 0 6"/><path d="M18.5 6a8.5 8.5 0 0 1 0 12"/>',
+    mute: '<path d="M11 5 6.5 9H3v6h3.5L11 19z"/><path d="m16 9 5 6"/><path d="m21 9-5 6"/>',
+    home: '<path d="M4 10.5 12 4l8 6.5V20h-5.5v-5.5h-5V20H4z"/>',
+    search: '<circle cx="11" cy="11" r="6.5"/><path d="m20 20-4.2-4.2"/>',
+    library: '<path d="M5 4v16"/><path d="M10 4v16"/><path d="m15.5 5.5 4 14"/>',
+    plus: '<path d="M12 5v14"/><path d="M5 12h14"/>',
+    trash: '<path d="M4 7h16"/><path d="M9 7V4.5h6V7"/><path d="m6.5 7 1 13h9l1-13"/>',
+    edit: '<path d="M4 20h4L19 9l-4-4L4 16z"/>',
+    check: '<path d="m5 12.5 4.5 4.5L19 7.5"/>',
+    clock: '<circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/>',
+    note: '<path d="M9 18V5.5l11-2V16"/><circle cx="6.5" cy="18" r="2.8"/><circle cx="17.5" cy="16" r="2.8"/>',
+    wave: '<path d="M4 10v4M8 6v12M12 3v18M16 8v8M20 11v2"/>',
+    dots: '<circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/>',
+    eq: '<rect x="4" y="6" width="4" height="14" rx="1"/><rect x="10" y="3" width="4" height="17" rx="1"/><rect x="16" y="9" width="4" height="11" rx="1"/>',
+  };
+  PATHS.repeat1 = PATHS.repeat + '<path d="M11 10h1v4"/>';
+  const STROKE = new Set(['shuffle', 'repeat', 'repeat1', 'heart', 'vol', 'mute', 'home', 'search', 'library', 'plus', 'trash', 'edit', 'check', 'clock', 'note', 'wave']);
+  const ic = (n, cls = '') => `<svg class="sv ${STROKE.has(n) ? 's' : ''} ${n === 'eq' ? 'eq' : ''} ${cls}" viewBox="0 0 24 24" aria-hidden="true">${PATHS[n]}</svg>`;
+  document.querySelectorAll('[data-ic]').forEach(e => { e.innerHTML = ic(e.dataset.ic); });
   const store = { get(k, d) { try { return JSON.parse(localStorage.getItem(k)) ?? d; } catch { return d; } },
                   set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} } };
 
@@ -241,14 +309,14 @@
   // ---------- отрисовка ----------
   function renderSide() {
     const el = $('pls'); el.innerHTML = '';
-    const items = [{ id: 'all', name: 'Все треки', ic: '🎵', n: tracks.length },
-                   { id: 'liked', name: 'Понравившиеся', ic: '♥', n: tracks.filter(t => t.liked).length, liked: true },
-                   ...playlists.map(p => ({ id: p.id, name: p.name, ic: '♪', n: tracks.filter(t => t.pl.includes(p.id)).length }))];
+    const items = [{ id: 'all', name: 'Все треки', ic: 'note', n: tracks.length },
+                   { id: 'liked', name: 'Понравившиеся', ic: 'heart', n: tracks.filter(t => t.liked).length, liked: true },
+                   ...playlists.map(p => ({ id: p.id, name: p.name, ic: 'note', n: tracks.filter(t => t.pl.includes(p.id)).length }))];
     items.forEach(it => {
       const b = document.createElement('button');
       b.className = 'pl' + (it.id === view ? ' active' : '');
       b.innerHTML = `<div class="ic ${it.liked ? 'liked' : ''}"></div><div><div class="nm"></div><div class="ct"></div></div>`;
-      b.querySelector('.ic').textContent = it.ic; b.querySelector('.nm').textContent = it.name;
+      b.querySelector('.ic').innerHTML = ic(it.ic, it.liked ? 'fill' : ''); b.querySelector('.nm').textContent = it.name;
       b.querySelector('.ct').textContent = `${it.n} трек.`;
       b.onclick = () => { view = it.id; query = ''; $('q').value = ''; renderAll(); };
       if (playlists.some(p => p.id === it.id)) b.oncontextmenu = e => { e.preventDefault(); plMenu(e, it.id); };
@@ -263,7 +331,7 @@
     const title = view === 'all' ? 'Все треки' : view === 'liked' ? 'Понравившиеся' : pl?.name || '';
     $('heroTitle').textContent = title;
     $('heroKind').textContent = view === 'all' ? 'МЕДИАТЕКА' : 'ПЛЕЙЛИСТ';
-    $('heroIc').textContent = view === 'liked' ? '♥' : view === 'all' ? '🎵' : '♪';
+    $('heroIc').innerHTML = view === 'liked' ? ic('heart', 'fill') : ic('note');
     $('hero').style.setProperty('--hue', view === 'liked' ? '#4b32c3' : hue(title));
     const total = list.reduce((s, t) => s + t.dur, 0);
     $('heroInfo').textContent = `${list.length} трек. · ${Math.round(total / 60)} мин`;
@@ -274,8 +342,9 @@
       const r = document.createElement('div');
       r.className = 'row t' + (cur && cur.id === t.id ? ' cur' : '');
       const playing = cur && cur.id === t.id && !audio.paused;
-      r.innerHTML = '<span class="num"><span></span><b class="pb">▶</b></span><span class="ttl"></span><span class="time"></span><button class="more" aria-label="Меню">⋯</button>';
-      r.querySelector('.num span').textContent = playing ? '♪' : i + 1;
+      r.innerHTML = '<span class="num"><span></span><b class="pb"></b></span><span class="ttl"></span><span class="time"></span><button class="more" aria-label="Меню"></button>';
+      r.querySelector('.pb').innerHTML = ic('play'); r.querySelector('.more').innerHTML = ic('dots');
+      r.querySelector('.num span').innerHTML = playing ? ic('eq') : i + 1;
       r.querySelector('.ttl').textContent = t.name;
       r.querySelector('.time').textContent = fmt(t.dur);
       r.ondblclick = () => startQueue(list.map(x => x.id), i);
@@ -292,12 +361,12 @@
     $('npTitle').textContent = t ? t.name : 'Ничего не играет';
     $('npSub').textContent = t ? `Трек ${qi + 1} из ${queue.length}` : 'Добавьте музыку';
     $('cv').style.background = t ? hue(t.name) : '#333';
-    $('like').textContent = t && t.liked ? '♥' : '♡';
+    $('like').innerHTML = ic('heart', t && t.liked ? 'fill' : '');
     $('like').classList.toggle('on', !!(t && t.liked));
-    $('play').textContent = audio.paused ? '▶' : '⏸';
-    $('bigPlay').textContent = audio.paused ? '▶' : '⏸';
+    $('play').innerHTML = ic(audio.paused ? 'play' : 'pause');
+    $('bigPlay').innerHTML = ic(audio.paused ? 'play' : 'pause');
     $('shuffle').classList.toggle('on', shuffle); $('shuffle2').classList.toggle('on', shuffle);
-    $('repeat').classList.toggle('on', repeat > 0); $('repeat').textContent = repeat === 2 ? '🔂' : '🔁';
+    $('repeat').classList.toggle('on', repeat > 0); $('repeat').innerHTML = ic(repeat === 2 ? 'repeat1' : 'repeat');
     document.title = t && !audio.paused ? `${t.name} • Волна` : 'Волна — музыкальный плеер';
   }
   const renderAll = () => { renderSide(); renderMain(); renderBar(); };
@@ -309,7 +378,7 @@
     const m = document.createElement('div'); m.className = 'menu';
     items.forEach(it => {
       if (it === '-') return m.appendChild(document.createElement('hr'));
-      const b = document.createElement('button'); b.textContent = it.label;
+      const b = document.createElement('button'); b.innerHTML = (it.icon ? ic(it.icon, it.cls || '') : '') + '<span></span>'; b.lastChild.textContent = it.label;
       b.onclick = () => { closeMenu(); it.fn(); }; m.appendChild(b);
     });
     document.body.appendChild(m);
@@ -322,18 +391,18 @@
   $('main').addEventListener('scroll', closeMenu);
 
   function trackMenu(e, t) {
-    const items = [{ label: t.liked ? '♥ Убрать из понравившихся' : '♡ В понравившиеся', fn: () => { t.liked = !t.liked; saveTrack(t); renderAll(); } }];
+    const items = [{ icon: 'heart', cls: t.liked ? 'fill' : '', label: t.liked ? 'Убрать из понравившихся' : 'В понравившиеся', fn: () => { t.liked = !t.liked; saveTrack(t); renderAll(); } }];
     playlists.forEach(p => {
       const has = t.pl.includes(p.id);
-      items.push({ label: `${has ? '✓ ' : '+ '}${p.name}`, fn: () => { t.pl = has ? t.pl.filter(x => x !== p.id) : [...t.pl, p.id]; saveTrack(t); renderAll(); } });
+      items.push({ icon: has ? 'check' : 'plus', label: p.name, fn: () => { t.pl = has ? t.pl.filter(x => x !== p.id) : [...t.pl, p.id]; saveTrack(t); renderAll(); } });
     });
-    items.push('-', { label: '🗑 Удалить трек', fn: () => removeTrack(t) });
+    items.push('-', { icon: 'trash', label: 'Удалить трек', fn: () => removeTrack(t) });
     showMenu(e, items);
   }
   function plMenu(e, id) {
     showMenu(e, [
-      { label: '✏️ Переименовать', fn: () => { const p = playlists.find(x => x.id === id); const n = prompt('Название плейлиста', p.name); if (n && n.trim()) { p.name = n.trim(); store.set('playlists', playlists); renderAll(); } } },
-      { label: '🗑 Удалить плейлист', fn: () => {
+      { icon: 'edit', label: 'Переименовать', fn: () => { const p = playlists.find(x => x.id === id); const n = prompt('Название плейлиста', p.name); if (n && n.trim()) { p.name = n.trim(); store.set('playlists', playlists); renderAll(); } } },
+      { icon: 'trash', label: 'Удалить плейлист', fn: () => {
           playlists = playlists.filter(p => p.id !== id); store.set('playlists', playlists);
           tracks.forEach(t => { if (t.pl.includes(id)) { t.pl = t.pl.filter(x => x !== id); saveTrack(t); } });
           if (view === id) view = 'all'; renderAll(); } },
@@ -400,9 +469,9 @@
   document.querySelector('[data-go]').onclick = () => { view = 'all'; renderAll(); };
 
   const vol = $('vol');
-  const setVol = v => { audio.volume = v / 100; vol.value = v; vol.style.setProperty('--p', v + '%'); $('mute').textContent = v == 0 || audio.muted ? '🔇' : '🔊'; store.set('vol', v); };
+  const setVol = v => { audio.volume = v / 100; vol.value = v; vol.style.setProperty('--p', v + '%'); $('mute').innerHTML = ic(v == 0 || audio.muted ? 'mute' : 'vol'); store.set('vol', v); };
   vol.oninput = () => { audio.muted = false; setVol(+vol.value); };
-  $('mute').onclick = () => { audio.muted = !audio.muted; $('mute').textContent = audio.muted ? '🔇' : '🔊'; };
+  $('mute').onclick = () => { audio.muted = !audio.muted; $('mute').innerHTML = ic(audio.muted ? 'mute' : 'vol'); };
   setVol(store.get('vol', 80));
 
   const seekEl = $('seek');
