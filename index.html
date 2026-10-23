@@ -144,7 +144,7 @@
   <div class="toolbar">
     <button class="bigplay" id="bigPlay" aria-label="Воспроизвести">▶</button>
     <button class="ghost" id="shuffle" title="Перемешать" aria-label="Перемешать">🔀</button>
-    <label class="add">+ Добавить файлы<input type="file" id="files" accept="audio/*" multiple></label>
+    <label class="add">+ Добавить файлы<input type="file" id="files" accept="audio/*,.mp3,.m4a,.aac,.wav,.ogg,.opus,.flac" multiple></label>
     <input class="search" id="q" type="search" placeholder="Поиск в списке" aria-label="Поиск">
   </div>
   <div class="row head"><span class="num">#</span><span>Название</span><span class="time">⏱</span><span></span></div>
@@ -218,17 +218,24 @@
   // ---------- добавление ----------
   const readDuration = url => new Promise(res => {
     const a = new Audio(); a.preload = 'metadata';
-    a.onloadedmetadata = () => res(a.duration); a.onerror = () => res(0); a.src = url;
+    const done = d => { clearTimeout(tm); a.onloadedmetadata = a.onerror = null; res(isFinite(d) ? d : 0); };
+    const tm = setTimeout(() => done(0), 4000);
+    a.onloadedmetadata = () => done(a.duration); a.onerror = () => done(0); a.src = url;
   });
+  const AUDIO_EXT = /\.(mp3|m4a|aac|wav|wave|ogg|oga|opus|flac|weba|webm|mp4|caf|aif|aiff|wma)$/i;
+  const isAudio = f => (f.type && f.type.startsWith('audio/')) || AUDIO_EXT.test(f.name);
+  function note(msg) {
+    $('empty').textContent = msg; $('empty').style.display = 'block';
+    setTimeout(renderMain, 4000);
+  }
   async function addFiles(list) {
-    const files = [...list].filter(f => f.type.startsWith('audio/'));
-    for (const f of files) {
-      const t = { id: crypto.randomUUID(), name: f.name.replace(/\.[^.]+$/, ''), blob: f, url: URL.createObjectURL(f),
-                  dur: 0, liked: view === 'liked', pl: playlists.some(p => p.id === view) ? [view] : [] };
-      t.dur = await readDuration(t.url);
-      tracks.push(t); saveTrack(t);
-    }
+    const all = [...list], files = all.filter(isAudio);
+    if (all.length && !files.length) { note('Это не аудиофайлы. Выберите mp3, m4a, wav, ogg или flac.'); return; }
+    const added = files.map(f => ({ id: crypto.randomUUID(), name: f.name.replace(/\.[^.]+$/, ''), blob: f, url: URL.createObjectURL(f),
+                  dur: 0, liked: view === 'liked', pl: playlists.some(p => p.id === view) ? [view] : [] }));
+    added.forEach(t => { tracks.push(t); saveTrack(t); });
     renderAll();
+    for (const t of added) { t.dur = await readDuration(t.url); saveTrack(t); renderMain(); }
   }
 
   // ---------- отрисовка ----------
