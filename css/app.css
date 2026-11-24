@@ -335,6 +335,17 @@ h1, h2, h3, p { margin: 0; }
 .sub-title .ico { color: var(--work); }
 .form-card .field-row + .hint + .sub-title { margin-top: 14px; }
 
+.help h4 { display: flex; align-items: center; gap: 8px; font-size: 16px; font-weight: 800; margin: 18px 0 6px; }
+.help h4:first-child { margin-top: 4px; }
+.help h4 .ico { color: var(--work); }
+.help ul { margin: 0; padding-left: 20px; }
+.help li { margin: 5px 0; }
+.help p { margin: 0; }
+.help .dot { width: 12px; height: 12px; border-radius: 4px; vertical-align: -1px; }
+.help-moon { width: 14px; height: 14px; fill: var(--ring); stroke: none; vertical-align: -2px; }
+.help + .btn-block { margin-top: 20px; }
+.help-link { display: flex; align-items: center; gap: 6px; margin: 4px auto 0; font-size: 14px; }
+
 /* ---------- итоги ---------- */
 .stats { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 .stat { background: var(--off); color: var(--off-ink); border-radius: 16px; padding: 12px 14px; display: grid; }
