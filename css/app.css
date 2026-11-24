@@ -379,6 +379,33 @@ h1, h2, h3, p { margin: 0; }
 .footer-love { display: flex; justify-content: center; align-items: center; gap: 6px; color: var(--work); font-weight: 600; margin: 8px 0 4px; }
 .footer-love .ico { fill: currentColor; }
 
+/* ---------- общий график ---------- */
+.is-viewer .tabbar { display: none; }
+.is-viewer .view { padding-bottom: calc(32px + var(--safe-b)); }
+.is-viewer #toast { bottom: calc(24px + var(--safe-b)); }
+.viewer-status { margin: -8px 4px 12px; color: var(--muted); font-size: 13px; font-weight: 500; }
+.viewer-status:empty { display: none; }
+.viewer-status.is-warn, .share-status.is-warn { color: var(--warn-ink); }
+.top .icon-btn { align-self: center; }
+.day-view { display: flex; align-items: center; gap: 12px; margin: 16px 0 20px; padding: 14px; border-radius: 16px; background: var(--off); }
+.day-view .dot { width: 20px; height: 20px; border-radius: 7px; }
+.day-view b { display: block; font-size: 17px; }
+.day-view small { color: var(--muted); font-size: 14px; }
+.share-link {
+  margin-top: 4px; padding: 11px 12px; border-radius: 12px; background: var(--input); border: 1.5px dashed var(--line);
+  font-size: 13px; color: var(--muted); word-break: break-all; user-select: all;
+}
+.share-status { margin: 0 0 8px; }
+.share-name { margin-top: 14px; }
+#share-card .btn-ghost-danger { margin-top: 12px; }
+.view-other { margin-top: 14px; border-top: 1px solid var(--line); padding-top: 12px; }
+.view-other summary { color: var(--muted); font-size: 14px; font-weight: 600; cursor: pointer; }
+.view-other-row { display: flex; gap: 8px; margin-top: 10px; }
+.view-other-row input {
+  flex: 1; min-width: 0; font-size: 16px; padding: 10px 12px; border-radius: 12px;
+  border: 1.5px solid var(--line); background: var(--input); color: var(--text);
+}
+
 /* ---------- нижняя панель ---------- */
 .tabbar {
   position: fixed; left: 0; right: 0; bottom: 0; z-index: 10;
