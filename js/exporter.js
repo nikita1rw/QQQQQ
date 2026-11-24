@@ -154,7 +154,8 @@ export async function makeBackup() {
       thumbData: f.thumb ? await blobToDataUrl(f.thumb) : null,
     });
   }
-  const payload = { app: 'smeny', version: 1, exportedAt: new Date().toISOString(), settings: kv.settings, days, docs, files: outFiles };
+  const share = kv.share ? { id: kv.share.id, key: kv.share.key, name: kv.share.name, enabled: kv.share.enabled } : null;
+  const payload = { app: 'smeny', version: 1, exportedAt: new Date().toISOString(), settings: kv.settings, share, days, docs, files: outFiles };
   return new Blob([JSON.stringify(payload)], { type: 'application/json' });
 }
 
@@ -176,6 +177,7 @@ export async function restoreBackup(file) {
     st.kv.put(migrateSettings(data.settings), 'settings');
     st.kv.put(true, 'seeded');
     st.kv.put(true, 'helpSeen');
+    if (data.share?.id && data.share?.key) st.kv.put({ ...data.share, dirty: true, lastSync: null, error: '' }, 'share');
     Object.entries(data.days || {}).forEach(([k, v]) => st.days.put(v, k));
     (data.docs || []).forEach((d) => st.docs.put(d));
     files.forEach((f) => st.files.put(f));

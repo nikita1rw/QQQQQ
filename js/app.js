@@ -12,8 +12,12 @@ import {
 import { esc, icon, openSheet, confirmSheet, toast, saveFile, money, fmtHours, copyText } from './ui.js';
 import { renderDocs, docAlerts, alertText, openDoc } from './docs.js';
 import { buildIcs, monthReportText, monthCsv, makeBackup, restoreBackup, backupName, monthFileName } from './exporter.js';
+import {
+  syncConfigured, isScheduleSetting, shareLink, parseViewId, currentShare, onShareChange, initShare, queueSync,
+  enableShare, setShareName, disableShare, fetchShared,
+} from './sync.js';
 
-const APP_VERSION = '1.3';
+const APP_VERSION = '1.4';
 
 const state = {
   settings: { ...DEFAULT_SETTINGS },
@@ -22,6 +26,7 @@ const state = {
   tab: 'grafik',
   cal: null, // { y, m } — открытый месяц в календаре
   stat: null, // { y, m } — открытый месяц в итогах
+  viewer: null, // { id, name, updatedAt, status } — режим просмотра чужого графика
 };
 
 const view = document.getElementById('view');
@@ -47,6 +52,7 @@ async function load() {
 async function saveSettings(patch) {
   state.settings = { ...state.settings, ...patch };
   await db.put('kv', state.settings, 'settings');
+  if (isScheduleSetting(patch)) queueSync();
 }
 
 async function saveDay(key, rec) {
@@ -62,6 +68,7 @@ async function saveDay(key, rec) {
     delete state.days[key];
     await db.del('days', key);
   }
+  queueSync();
 }
 
 const ctx = {
@@ -85,9 +92,17 @@ function setTab(tab, push = true) {
 }
 
 document.querySelectorAll('.tabbar [data-tab]').forEach((b) => b.addEventListener('click', () => setTab(b.dataset.tab)));
-window.addEventListener('hashchange', () => setTab(location.hash.slice(1), false));
+window.addEventListener('hashchange', () => {
+  if (state.viewer) return;
+  if (parseViewId(location.hash)) location.reload();
+  else setTab(location.hash.slice(1), false);
+});
 
 function render() {
+  if (state.viewer) {
+    renderSchedule();
+    return;
+  }
   document.querySelectorAll('.tabbar [data-tab]').forEach((b) => {
     const on = b.dataset.tab === state.tab;
     b.classList.toggle('active', on);
@@ -203,16 +218,31 @@ function renderSchedule() {
     state.cal = { y: t.y, m: t.m };
   }
   const { y, m } = state.cal;
-  const alerts = docAlerts(state.docs, s);
+  const viewer = state.viewer;
+  const alerts = viewer ? [] : docAlerts(state.docs, s);
+
+  if (viewer && viewer.status === 'closed') {
+    view.innerHTML = `
+      <div class="empty card">
+        <div class="empty-ico">${icon('cal')}</div>
+        <h2>График недоступен</h2>
+        <p>Доступ к нему закрыли или ссылка неправильная. Попроси прислать новую ссылку.</p>
+        <button class="btn" id="viewer-exit">Выйти из просмотра</button>
+      </div>`;
+    view.querySelector('#viewer-exit').addEventListener('click', exitViewer);
+    return;
+  }
 
   view.innerHTML = `
     <header class="top">
       <div>
         <p class="eyebrow">${esc(cycleText(s))}</p>
-        <h1>График работы</h1>
+        <h1>${viewer ? esc(viewer.name ? `График: ${viewer.name}` : 'Общий график') : 'График работы'}</h1>
       </div>
+      ${viewer ? `<button class="icon-btn" id="viewer-refresh" aria-label="Обновить">${icon('refresh')}</button>` : ''}
     </header>
-    ${todayCard()}
+    ${viewer ? `<p class="viewer-status ${viewer.status === 'ok' ? '' : 'is-warn'}">${esc(viewerStatusText())}</p>` : ''}
+    ${viewer && !viewer.updatedAt ? '' : todayCard()}
     ${alerts.length ? `<button class="alert alert-${alerts[0].e.level}" id="doc-alert">
         ${icon('alert')}<span>${esc(alertText(alerts[0]))}${alerts.length > 1 ? ` и ещё ${alerts.length - 1}` : ''}</span>${icon('right', 'ico-sm')}
       </button>` : ''}
@@ -225,10 +255,15 @@ function renderSchedule() {
       <span><i class="dot st-sick"></i>больничный</span>
       <span><i class="dot st-vacation"></i>отпуск</span>
     </div>
-    <p class="tip">Нажми на день, чтобы отметить замену, ночную смену, больничный или добавить заметку.</p>
-    <button class="link-btn help-link" id="help">${icon('note', 'ico-sm')}Как пользоваться</button>
+    ${viewer ? `
+      <p class="tip">Только просмотр. График обновляется сам, когда в нём что-то меняют.</p>
+      <button class="link-btn help-link" id="viewer-exit">Выйти из просмотра</button>` : `
+      <p class="tip">Нажми на день, чтобы отметить замену, ночную смену, больничный или добавить заметку.</p>
+      <button class="link-btn help-link" id="help">${icon('note', 'ico-sm')}Как пользоваться</button>`}
   `;
-  view.querySelector('#help').addEventListener('click', openHelp);
+  view.querySelector('#help')?.addEventListener('click', openHelp);
+  view.querySelector('#viewer-exit')?.addEventListener('click', exitViewer);
+  view.querySelector('#viewer-refresh')?.addEventListener('click', () => refreshViewer(true));
 
   const go = (d) => {
     state.cal = shiftMonth(state.cal.y, state.cal.m, d);
@@ -247,7 +282,7 @@ function renderSchedule() {
     const grid = view.querySelector('#grid');
     grid.addEventListener('click', (e) => {
       const b = e.target.closest('[data-day]');
-      if (b) openDay(b.dataset.day);
+      if (b) (state.viewer ? openDayView : openDay)(b.dataset.day);
     });
     let x0 = null;
     let y0 = null;
@@ -267,6 +302,106 @@ function renderSchedule() {
     if (alerts.length > 1) setTab('docs');
     else openDoc(doc, state, ctx);
   });
+}
+
+// ---------- просмотр чужого графика ----------
+
+function fmtStamp(value) {
+  const d = new Date(value);
+  const time = `${d.getHours()}:${String(d.getMinutes()).padStart(2, '0')}`;
+  const key = keyOf(d.getFullYear(), d.getMonth(), d.getDate());
+  if (key === todayKey()) return `сегодня в ${time}`;
+  if (key === addDays(todayKey(), -1)) return `вчера в ${time}`;
+  return `${fmtDay(key)} в ${time}`;
+}
+
+function viewerStatusText() {
+  const v = state.viewer;
+  if (v.status === 'loading') return 'Загружаю график…';
+  const when = v.updatedAt ? `Изменён ${fmtStamp(v.updatedAt)}` : '';
+  if (v.status === 'offline') return `Нет интернета${when ? ` · ${when.toLowerCase()}` : ''}`;
+  if (v.status === 'error') return `Не получилось обновить${when ? ` · ${when.toLowerCase()}` : ''}`;
+  return when;
+}
+
+function applyViewerData(cache) {
+  state.settings = migrateSettings(cache.data.settings || {});
+  state.days = cache.data.days || {};
+  state.viewer.name = cache.data.name || '';
+  state.viewer.updatedAt = cache.updated_at;
+}
+
+async function refreshViewer(manual = false) {
+  const v = state.viewer;
+  if (!v || v.busy) return;
+  v.busy = true;
+  try {
+    const res = await fetchShared(v.id);
+    if (!res) {
+      v.status = 'closed';
+    } else {
+      const cache = { id: v.id, data: res.data, updated_at: res.updated_at };
+      applyViewerData(cache);
+      v.status = 'ok';
+      db.put('kv', cache, 'viewCache');
+    }
+    if (manual) toast('Обновлено');
+  } catch (e) {
+    v.status = e.offline ? 'offline' : 'error';
+    if (manual) toast(e.offline ? 'Нет интернета' : 'Не получилось обновить');
+  }
+  v.busy = false;
+  render();
+}
+
+async function startViewer(id) {
+  state.viewer = { id, name: '', updatedAt: null, status: 'loading' };
+  state.docs = [];
+  document.body.classList.add('is-viewer');
+  history.replaceState(null, '', `#view=${id}`);
+  const cache = await db.get('kv', 'viewCache');
+  if (cache && cache.id === id && cache.data) {
+    applyViewerData(cache);
+    state.viewer.status = 'ok';
+  }
+  render();
+  await refreshViewer();
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') refreshViewer();
+  });
+  setInterval(() => {
+    if (document.visibilityState === 'visible') refreshViewer();
+  }, 120000);
+}
+
+async function exitViewer() {
+  const ok = await confirmSheet('Выйти из просмотра?', { ok: 'Выйти', sub: 'Чтобы снова смотреть этот график, понадобится ссылка.' });
+  if (!ok) return;
+  await db.del('kv', 'viewId');
+  await db.del('kv', 'viewCache');
+  location.replace(`${location.pathname}#grafik`);
+  location.reload();
+}
+
+function openDayView(key) {
+  const s = state.settings;
+  const info = dayInfo(key, s, state.days);
+  const label = info.isShift
+    ? `${info.status === 'extra' ? 'Замена' : 'Смена'} · ${KINDS[info.kind].label.toLowerCase()}`
+    : STATUSES[info.status].label;
+  openSheet(
+    `<div class="sheet-grab" aria-hidden="true"></div>
+     <h3 class="sheet-title">${cap(fmtDayLong(key))}</h3>
+     <div class="day-view">
+       <i class="dot st-${info.status}"></i>
+       <div>
+         <b>${esc(label)}</b>
+         ${info.isShift ? `<small>${fmtRange(info.kind, s)} · ${fmtHours(info.hours)}</small>` : ''}
+       </div>
+     </div>
+     <button class="btn btn-primary btn-block" data-close>Закрыть</button>`,
+    { label: fmtDayLong(key) },
+  );
 }
 
 function openDay(key) {
@@ -411,6 +546,7 @@ function openHelp() {
        <ul>
          <li>Всё хранится только на этом телефоне. Раз в месяц: «Настройки» → «Резервная копия» → «Сохранить» (себе в Telegram или на Google Диск).</li>
          <li>«Настройки» → «Добавить смены в календарь телефона» — телефон будет напоминать о сменах.</li>
+         ${syncConfigured() ? '<li>«Настройки» → «Общий график» — ссылка, по которой близкий человек видит твои смены (без документов и заметок).</li>' : ''}
        </ul>
      </div>
      <button class="btn btn-primary btn-block" data-close>Понятно</button>`,
@@ -601,6 +737,8 @@ function renderSettings() {
       <p class="hint">Смены на 3 месяца вперёд и сроки документов. Календарь телефона напомнит накануне вечером. Если график поменялся — добавь заново.</p>
     </section>
 
+    ${syncConfigured() ? `<section class="card form-card" id="share-card"></section>` : ''}
+
     <section class="card form-card">
       <h2 class="card-title">Резервная копия</h2>
       <p class="hint">Всё хранится только на этом телефоне и никуда не отправляется. Раз в месяц сохраняй копию — например, в «Файлы», Google Диск или себе в Telegram.</p>
@@ -666,6 +804,7 @@ function renderSettings() {
   bind('payExtraRate', async () => saveSettings({ payExtraRate: Math.max(0, Number(view.querySelector('#payExtraRate').value) || 0) }));
   bind('remindDays', async () => { const v = num('remindDays', 1, 365); if (v) await saveSettings({ remindDays: v }); });
 
+  if (syncConfigured()) drawShareCard();
   view.querySelector('#help').addEventListener('click', openHelp);
   view.querySelector('#ics').addEventListener('click', () => saveFile(buildIcs(state, 3), 'smeny.ics'));
   view.querySelector('#backup').addEventListener('click', async () => {
@@ -686,6 +825,7 @@ function renderSettings() {
     if (!ok) return;
     try {
       await restoreBackup(f);
+      await initShare(state);
       await ctx.reload();
       toast('Готово, всё восстановлено');
     } catch (e) {
@@ -695,6 +835,14 @@ function renderSettings() {
   view.querySelector('#wipe').addEventListener('click', async () => {
     const ok = await confirmSheet('Стереть все данные?', { ok: 'Стереть', danger: true, sub: 'Удалятся отметки, заметки, документы и фото. Отменить нельзя — сначала сохрани копию.' });
     if (!ok) return;
+    if (currentShare()) {
+      try {
+        await disableShare();
+      } catch {
+        toast('Нет интернета — не получилось закрыть общий график. Попробуй позже.');
+        return;
+      }
+    }
     await db.clearAll();
     state.cal = null;
     await ctx.reload();
@@ -702,11 +850,121 @@ function renderSettings() {
   });
 }
 
+// ---------- общий график (настройки) ----------
+
+function shareStatusText(sh) {
+  if (sh.error === 'offline') return 'Нет интернета — отправлю, когда появится';
+  if (sh.error) return `Не получилось отправить: ${sh.error}`;
+  if (sh.dirty) return 'Отправляю…';
+  return sh.lastSync ? `Отправлено ${fmtStamp(sh.lastSync)}` : '';
+}
+
+let unsubShare = null;
+
+function drawShareCard() {
+  const card = view.querySelector('#share-card');
+  if (!card) return;
+  const sh = currentShare();
+  card.innerHTML = `
+    <h2 class="card-title">Общий график</h2>
+    ${sh?.enabled ? `
+      <p class="hint share-status ${sh.error ? 'is-warn' : ''}" id="share-status">${esc(shareStatusText(sh))}</p>
+      <div class="share-link" id="share-link">${esc(shareLink(sh.id))}</div>
+      <div class="row-btns">
+        <button class="btn btn-primary" id="share-send">${icon('share')}<span>Отправить</span></button>
+        <button class="btn" id="share-copy">${icon('copy')}<span>Скопировать</span></button>
+      </div>
+      <label class="field share-name">
+        <span>Подпись графика</span>
+        <input id="share-name" value="${esc(sh.name)}" placeholder="Например, Аня" autocomplete="off">
+      </label>
+      <p class="hint">По ссылке видны смены, замены, ночные и часы. Заметки, деньги и документы не передаются.</p>
+      <button class="btn btn-ghost-danger btn-block" id="share-off">Закрыть доступ</button>` : `
+      <p class="hint">Получи ссылку и отправь близкому человеку — он будет видеть твои смены, замены и ночные. Заметки, деньги и документы не передаются.</p>
+      <label class="field share-name">
+        <span>Подпись графика</span>
+        <input id="share-name" placeholder="Например, Аня" autocomplete="off">
+      </label>
+      <button class="btn btn-primary btn-block" id="share-on">${icon('share')}<span>Включить и получить ссылку</span></button>`}
+    <details class="view-other">
+      <summary>Открыть чужой график по ссылке</summary>
+      <div class="view-other-row">
+        <input id="view-link" placeholder="Вставь ссылку" autocomplete="off" inputmode="url">
+        <button class="btn" id="view-open">Открыть</button>
+      </div>
+    </details>`;
+
+  const link = sh?.enabled ? shareLink(sh.id) : '';
+  card.querySelector('#share-on')?.addEventListener('click', async (e) => {
+    e.currentTarget.disabled = true;
+    const res = await enableShare(card.querySelector('#share-name').value.trim());
+    drawShareCard();
+    toast(res?.error ? 'Ссылка создана, отправлю график, когда будет интернет' : 'Готово! Теперь отправь ссылку');
+  });
+  card.querySelector('#share-send')?.addEventListener('click', async () => {
+    const text = 'Мой график смен — открывай по ссылке:';
+    if (navigator.share) {
+      try {
+        await navigator.share({ title: 'Мой график', text, url: link });
+        return;
+      } catch (err) {
+        if (err.name === 'AbortError') return;
+      }
+    }
+    copyText(link);
+  });
+  card.querySelector('#share-copy')?.addEventListener('click', () => copyText(link));
+  card.querySelector('#share-name').addEventListener('change', (e) => {
+    if (currentShare()) {
+      setShareName(e.target.value.trim());
+      toast('Сохранено');
+    }
+  });
+  card.querySelector('#share-off')?.addEventListener('click', async () => {
+    const ok = await confirmSheet('Закрыть доступ к графику?', { ok: 'Закрыть', danger: true, sub: 'Старая ссылка перестанет работать. Потом можно получить новую.' });
+    if (!ok) return;
+    try {
+      await disableShare();
+      drawShareCard();
+      toast('Доступ закрыт');
+    } catch {
+      toast('Нет интернета — попробуй позже');
+    }
+  });
+  card.querySelector('#view-open').addEventListener('click', async () => {
+    const id = parseViewId(card.querySelector('#view-link').value);
+    if (!id) {
+      toast('Это не похоже на ссылку на график');
+      return;
+    }
+    await db.put('kv', id, 'viewId');
+    location.replace(`${location.pathname}#view=${id}`);
+    location.reload();
+  });
+
+  unsubShare?.();
+  unsubShare = onShareChange((next) => {
+    const el = document.getElementById('share-status');
+    if (!el || !next) return;
+    el.textContent = shareStatusText(next);
+    el.classList.toggle('is-warn', Boolean(next.error));
+  });
+}
+
 // ---------- запуск ----------
 
 async function start() {
   try {
+    const fromLink = parseViewId(location.hash);
+    if (fromLink) await db.put('kv', fromLink, 'viewId');
+    const viewId = syncConfigured() ? await db.get('kv', 'viewId') : null;
+    if (viewId) {
+      if ('serviceWorker' in navigator) navigator.serviceWorker.register('./sw.js').catch(() => {});
+      await startViewer(viewId);
+      return;
+    }
     await load();
+    await initShare(state);
   } catch (e) {
     view.innerHTML = `<div class="empty card"><h2>Не получилось открыть хранилище</h2><p>Похоже, браузер в режиме инкогнито или запретил сохранять данные. Открой приложение в обычном режиме.</p></div>`;
     return;
