@@ -6,7 +6,7 @@ export const esc = (s) =>
 export const icon = (name, cls = '') =>
   `<svg class="ico ${cls}" aria-hidden="true" focusable="false"><use href="#i-${name}"/></svg>`;
 
-export const money = (n) => `${Math.round(n).toLocaleString('ru-RU')} ₽`;
+export const money = (n) => `${Math.round(n).toLocaleString('ru-RU')} ₸`;
 
 export const fmtHours = (h) => `${Number.isInteger(h) ? h : h.toFixed(1).replace('.', ',')} ч`;
 

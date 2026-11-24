@@ -144,7 +144,7 @@ export function renderDocs(root, state, ctx) {
       <div class="empty card">
         <div class="empty-ico">${icon('doc')}</div>
         <h2>Здесь будут документы</h2>
-        <p>Паспорт, СНИЛС, медкнижка, допуски, удостоверения — с фото и сроком действия. Приложение заранее напомнит, когда что-то заканчивается.</p>
+        <p>Удостоверение личности, паспорт, медкнижка, допуски, сертификаты — с фото и сроком действия. Приложение заранее напомнит, когда что-то заканчивается.</p>
         <button class="btn btn-primary" id="add-doc-2">${icon('plus')}<span>Добавить первый документ</span></button>
       </div>`}
   `;
@@ -292,7 +292,7 @@ async function deleteDoc(doc) {
 export function openDocForm(existing, state, ctx) {
   const doc = existing
     ? { ...existing, fileIds: [...(existing.fileIds || [])] }
-    : { id: uid(), type: 'passport', title: 'Паспорт', number: '', issued: '', expires: '', note: '', fileIds: [] };
+    : { id: uid(), type: 'idcard', title: 'Удостоверение личности', number: '', issued: '', expires: '', note: '', fileIds: [] };
   const added = []; // новые файлы, ещё не сохранённые
   const removed = new Set(); // id файлов, которые убрали
   let busy = false;

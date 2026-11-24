@@ -8,7 +8,6 @@ export const DEFAULT_SETTINGS = {
   dayEnd: '00:00', // 00:00 — до полуночи
   nightStart: '23:00', // ночная смена
   nightEnd: '08:00',
-  pattern: ['day', 'day', 'day'], // какая смена в каждый рабочий день цикла
   payType: 'shift', // 'shift' — за смену, 'hour' — за час
   payRate: 0,
   payExtraRate: 0, // 0 — как обычная смена
@@ -69,12 +68,8 @@ export function baseStatus(key, s) {
   return pos < s.workDays ? 'work' : 'off';
 }
 
-/** Какая смена по графику в этот день (для замен — дневная) */
-export function baseKind(key, s) {
-  const pos = cyclePos(key, s);
-  if (pos >= 0 && pos < s.workDays) return (s.pattern || [])[pos] === 'night' ? 'night' : 'day';
-  return 'day';
-}
+/** По умолчанию все смены дневные; ночную выбирают на конкретный день */
+export const baseKind = () => 'day';
 
 export function dayInfo(key, s, days) {
   const base = baseStatus(key, s);
@@ -107,8 +102,7 @@ export function migrateSettings(saved) {
   }
   delete s.shiftStart;
   delete s.shiftEnd;
-  const pattern = Array.isArray(s.pattern) ? s.pattern : [];
-  s.pattern = Array.from({ length: s.workDays }, (_, i) => (pattern[i] === 'night' ? 'night' : 'day'));
+  delete s.pattern;
   return s;
 }
 
@@ -159,19 +153,22 @@ export function runLength(key, s, days, pred) {
 // ---------- документы ----------
 
 export const DOC_TYPES = [
-  { id: 'passport', label: 'Паспорт' },
-  { id: 'snils', label: 'СНИЛС' },
-  { id: 'inn', label: 'ИНН' },
-  { id: 'oms', label: 'Полис ОМС' },
+  { id: 'idcard', label: 'Удостоверение личности', expires: true },
+  { id: 'passport', label: 'Паспорт', expires: true },
+  { id: 'iin', label: 'ИИН' },
   { id: 'medbook', label: 'Медкнижка', expires: true },
   { id: 'license', label: 'Удостоверение', expires: true },
+  { id: 'driver', label: 'Водительские права', expires: true },
   { id: 'permit', label: 'Допуск', expires: true },
   { id: 'cert', label: 'Сертификат', expires: true },
   { id: 'contract', label: 'Трудовой договор' },
   { id: 'other', label: 'Другое' },
 ];
 
-export const docTypeLabel = (id) => (DOC_TYPES.find((t) => t.id === id) || DOC_TYPES[DOC_TYPES.length - 1]).label;
+const LEGACY_TYPES = { snils: 'СНИЛС', inn: 'ИНН', oms: 'Полис ОМС' };
+
+export const docTypeLabel = (id) =>
+  LEGACY_TYPES[id] || (DOC_TYPES.find((t) => t.id === id) || DOC_TYPES[DOC_TYPES.length - 1]).label;
 
 /** { level: 'expired' | 'soon' | 'ok' | 'none', days } */
 export function docExpiry(doc, s, today = todayKey()) {
