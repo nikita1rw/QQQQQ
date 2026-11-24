@@ -13,7 +13,7 @@ import { esc, icon, openSheet, confirmSheet, toast, saveFile, money, fmtHours, c
 import { renderDocs, docAlerts, alertText, openDoc } from './docs.js';
 import { buildIcs, monthReportText, monthCsv, makeBackup, restoreBackup, backupName, monthFileName } from './exporter.js';
 
-const APP_VERSION = '1.2';
+const APP_VERSION = '1.3';
 
 const state = {
   settings: { ...DEFAULT_SETTINGS },
@@ -225,8 +225,10 @@ function renderSchedule() {
       <span><i class="dot st-sick"></i>больничный</span>
       <span><i class="dot st-vacation"></i>отпуск</span>
     </div>
-    <p class="tip">Нажми на день, чтобы отметить замену, вызов, больничный или добавить заметку.</p>
+    <p class="tip">Нажми на день, чтобы отметить замену, ночную смену, больничный или добавить заметку.</p>
+    <button class="link-btn help-link" id="help">${icon('note', 'ico-sm')}Как пользоваться</button>
   `;
+  view.querySelector('#help').addEventListener('click', openHelp);
 
   const go = (d) => {
     state.cal = shiftMonth(state.cal.y, state.cal.m, d);
@@ -351,6 +353,68 @@ function openDay(key) {
         render();
       },
     },
+  );
+}
+
+// ---------- Как пользоваться ----------
+
+function openHelp() {
+  const isIos = /iphone|ipad|ipod/i.test(navigator.userAgent);
+  const standalone = matchMedia('(display-mode: standalone)').matches || navigator.standalone;
+  const s = state.settings;
+  openSheet(
+    `<div class="sheet-head">
+       <span></span>
+       <h3 class="sheet-title">Как пользоваться</h3>
+       <button class="icon-btn" data-close aria-label="Закрыть">${icon('x')}</button>
+     </div>
+     <div class="help">
+       ${standalone ? '' : `
+       <h4>${icon('download', 'ico-sm')}Поставь на телефон</h4>
+       <p>${isIos
+         ? 'Safari → кнопка «Поделиться» <span class="kbd">⬆︎</span> → «На экран „Домой“».'
+         : 'Chrome → меню <span class="kbd">⋮</span> → «Установить приложение».'}
+       Появится иконка, и приложение будет работать без интернета.</p>`}
+
+       <h4>${icon('cal', 'ico-sm')}График</h4>
+       <ul>
+         <li>Смены ${s.workDays}/${s.offDays} уже расставлены с ${esc(fmtDay(s.startDate))}:
+           <i class="dot st-work"></i> работа, <i class="dot st-off"></i> выходной.</li>
+         <li>Сверху видно, что сегодня и когда следующая смена.</li>
+         <li>Месяцы листаются стрелками или свайпом.</li>
+       </ul>
+
+       <h4>${icon('edit', 'ico-sm')}Отметить день — нажми на него</h4>
+       <ul>
+         <li><i class="dot st-extra"></i> Вызвали в выходной → «Замена / вызов».</li>
+         <li>${icon('moon', 'help-moon')} Ночная смена → внизу «Какая смена» → «Ночная». По умолчанию все дневные.</li>
+         <li><i class="dot st-off"></i> Смену отменили или поменялась → «Выходной».</li>
+         <li><i class="dot st-sick"></i> Больничный и <i class="dot st-vacation"></i> отпуск — там же.</li>
+         <li>Можно поправить часы и написать заметку. «По графику» вернёт как было.</li>
+       </ul>
+
+       <h4>${icon('doc', 'ico-sm')}Документы</h4>
+       <ul>
+         <li>«Добавить» → тип, номер, срок действия, фото с камеры или из галереи.</li>
+         <li>За ${s.remindDays} ${plural(s.remindDays, 'день', 'дня', 'дней')} до конца срока появится предупреждение.</li>
+         <li>Номер копируется одним нажатием, фото можно отправить.</li>
+       </ul>
+
+       <h4>${icon('chart', 'ico-sm')}Итоги</h4>
+       <ul>
+         <li>Смены, замены, ночные и часы за месяц и за год.</li>
+         <li>Укажи ставку в «Настройках» — посчитает сумму в тенге.</li>
+         <li>«Отправить» — табель текстом, «Таблица» — файл для Excel.</li>
+       </ul>
+
+       <h4>${icon('alert', 'ico-sm')}Важно</h4>
+       <ul>
+         <li>Всё хранится только на этом телефоне. Раз в месяц: «Настройки» → «Резервная копия» → «Сохранить» (себе в Telegram или на Google Диск).</li>
+         <li>«Настройки» → «Добавить смены в календарь телефона» — телефон будет напоминать о сменах.</li>
+       </ul>
+     </div>
+     <button class="btn btn-primary btn-block" data-close>Понятно</button>`,
+    { full: true, label: 'Как пользоваться' },
   );
 }
 
@@ -547,6 +611,10 @@ function renderSettings() {
       <input type="file" id="restore-in" accept="application/json,.json" hidden>
     </section>
 
+    <section class="card">
+      <button class="btn btn-block" id="help">${icon('note')}<span>Как пользоваться</span></button>
+    </section>
+
     ${standalone ? '' : `<section class="card">
       <h2 class="card-title">Как поставить на телефон</h2>
       ${isIos
@@ -598,6 +666,7 @@ function renderSettings() {
   bind('payExtraRate', async () => saveSettings({ payExtraRate: Math.max(0, Number(view.querySelector('#payExtraRate').value) || 0) }));
   bind('remindDays', async () => { const v = num('remindDays', 1, 365); if (v) await saveSettings({ remindDays: v }); });
 
+  view.querySelector('#help').addEventListener('click', openHelp);
   view.querySelector('#ics').addEventListener('click', () => saveFile(buildIcs(state, 3), 'smeny.ics'));
   view.querySelector('#backup').addEventListener('click', async () => {
     toast('Готовлю копию…');
@@ -644,6 +713,12 @@ async function start() {
   }
   const tab = location.hash.slice(1);
   setTab(TABS.includes(tab) ? tab : 'grafik', false);
+
+  // при первом запуске — короткая инструкция
+  if (!(await db.get('kv', 'helpSeen'))) {
+    openHelp();
+    db.put('kv', true, 'helpSeen');
+  }
 
   // в полночь «сегодня» меняется
   let lastDay = todayKey();

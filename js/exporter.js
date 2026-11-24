@@ -175,6 +175,7 @@ export async function restoreBackup(file) {
   await db.batch(['kv', 'days', 'docs', 'files'], (st) => {
     st.kv.put(migrateSettings(data.settings), 'settings');
     st.kv.put(true, 'seeded');
+    st.kv.put(true, 'helpSeen');
     Object.entries(data.days || {}).forEach(([k, v]) => st.days.put(v, k));
     (data.docs || []).forEach((d) => st.docs.put(d));
     files.forEach((f) => st.files.put(f));

@@ -1,5 +1,5 @@
 // Офлайн-кэш: приложение открывается без интернета, обновления подтягиваются в фоне.
-const VERSION = 'smeny-v3';
+const VERSION = 'smeny-v4';
 const FONTS = 'smeny-fonts';
 const SHELL = [
   './',
