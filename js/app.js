@@ -13,7 +13,7 @@ import { esc, icon, openSheet, confirmSheet, toast, saveFile, money, fmtHours, c
 import { renderDocs, docAlerts, alertText, openDoc } from './docs.js';
 import { buildIcs, monthReportText, monthCsv, makeBackup, restoreBackup, backupName, monthFileName } from './exporter.js';
 
-const APP_VERSION = '1.1';
+const APP_VERSION = '1.2';
 
 const state = {
   settings: { ...DEFAULT_SETTINGS },
@@ -300,11 +300,14 @@ function openDay(key) {
            <span class="opt-text"><b>${o.label}</b>${o.sub ? `<small>${o.sub}</small>` : ''}</span>
          </label>`).join('')}
      </fieldset>
-     <div class="seg seg-kind" id="kind-field" role="radiogroup" aria-label="Какая смена" ${info.isShift ? '' : 'hidden'}>
-       ${['day', 'night'].map((k) => `
-         <label><input type="radio" name="kind" value="${k}" ${k === curKind ? 'checked' : ''}>
-           <span>${k === 'night' ? icon('moon', 'ico-sm') : icon('sun', 'ico-sm')} ${KINDS[k].label}<small>${fmtRange(k, s)}</small></span>
-         </label>`).join('')}
+     <div class="field" id="kind-field" ${info.isShift ? '' : 'hidden'}>
+       <span>Какая смена</span>
+       <div class="seg seg-kind" role="radiogroup" aria-label="Какая смена">
+         ${['day', 'night'].map((k) => `
+           <label><input type="radio" name="kind" value="${k}" ${k === curKind ? 'checked' : ''}>
+             <span><b>${icon(k === 'night' ? 'moon' : 'sun', 'ico-sm')}${KINDS[k].label}</b><small>${fmtRange(k, s)}</small></span>
+           </label>`).join('')}
+       </div>
      </div>
      <label class="field" id="hours-field" ${info.isShift ? '' : 'hidden'}>
        <span>Часов в этот день</span>
@@ -502,11 +505,7 @@ function renderSettings() {
           </label>
         </div>
         <p class="hint" id="${k}-hint"></p>`).join('')}
-      <div class="field cyc-field">
-        <span>Какие смены в цикле</span>
-        <div class="cyc" id="pattern"></div>
-      </div>
-      <p class="hint">Нажми на рабочий день цикла, чтобы сделать его ночным. Отдельную смену можно поменять прямо в календаре.</p>
+      <p class="hint">По умолчанию все смены дневные. Чтобы отметить ночную, нажми на день в календаре и выбери «Ночная».</p>
     </section>
 
     <section class="card form-card" id="pay">
@@ -517,11 +516,11 @@ function renderSettings() {
       </div>
       <div class="field-row">
         <label class="field">
-          <span>Ставка, ₽</span>
+          <span>Ставка, ₸</span>
           <input type="number" id="payRate" min="0" step="1" inputmode="decimal" value="${s.payRate || ''}" placeholder="0">
         </label>
         <label class="field">
-          <span>Замена, ₽</span>
+          <span>Замена, ₸</span>
           <input type="number" id="payExtraRate" min="0" step="1" inputmode="decimal" value="${s.payExtraRate || ''}" placeholder="как обычно">
         </label>
       </div>
@@ -576,27 +575,13 @@ function renderSettings() {
     const v = view.querySelector('#startDate').value;
     if (v) await saveSettings({ startDate: v });
   });
-  const drawPattern = () => {
-    const cur = state.settings;
-    view.querySelector('#pattern').innerHTML = cur.pattern.map((k, i) => `
-      <button type="button" class="cyc-btn ${k === 'night' ? 'is-night' : ''}" data-i="${i}" aria-pressed="${k === 'night'}"
-        aria-label="${i + 1}-й рабочий день: ${KINDS[k].label.toLowerCase()}">
-        ${icon(k === 'night' ? 'moon' : 'sun', 'ico-sm')}<small>смена ${i + 1}</small><b>${KINDS[k].label.toLowerCase()}</b>
-      </button>`).join('');
-  };
   const updLen = () => {
     ['day', 'night'].forEach((k) => {
       const h = hoursFor(k, state.settings);
       view.querySelector(`#${k}-hint`).textContent = `${fmtRange(k, state.settings)} · ${fmtHours(h)}${h === 24 ? ' (сутки)' : ''}`;
     });
   };
-  bind('workDays', async () => {
-    const v = num('workDays', 1, 14);
-    if (!v) return;
-    const pattern = Array.from({ length: v }, (_, i) => state.settings.pattern[i] || 'day');
-    await saveSettings({ workDays: v, pattern });
-    drawPattern();
-  });
+  bind('workDays', async () => { const v = num('workDays', 1, 14); if (v) await saveSettings({ workDays: v }); });
   bind('offDays', async () => { const v = num('offDays', 1, 14); if (v) await saveSettings({ offDays: v }); });
   ['dayStart', 'dayEnd', 'nightStart', 'nightEnd'].forEach((id) =>
     bind(id, async () => {
@@ -604,17 +589,6 @@ function renderSettings() {
       if (v) await saveSettings({ [id]: v });
       updLen();
     }));
-  view.querySelector('#pattern').addEventListener('click', async (e) => {
-    const b = e.target.closest('[data-i]');
-    if (!b) return;
-    const pattern = [...state.settings.pattern];
-    const i = Number(b.dataset.i);
-    pattern[i] = pattern[i] === 'night' ? 'day' : 'night';
-    await saveSettings({ pattern });
-    drawPattern();
-    toast(`${i + 1}-й день — ${KINDS[pattern[i]].label.toLowerCase()}`);
-  });
-  drawPattern();
   updLen();
   view.querySelectorAll('input[name="payType"]').forEach((r) => r.addEventListener('change', async () => {
     await saveSettings({ payType: r.value });
