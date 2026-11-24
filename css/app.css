@@ -155,6 +155,7 @@ h1, h2, h3, p { margin: 0; }
 .today-note .ico { margin-top: 2px; }
 .today.tone-work { background: linear-gradient(135deg, #f0708f, var(--work-deep, #d94470)); color: #fff; }
 .today.tone-extra { background: linear-gradient(135deg, #f6b552, #ea951f); color: #fff; }
+.today.tone-night { background: linear-gradient(135deg, #7b68e0, #3e2f8e); color: #fff; }
 .today.tone-sick { background: linear-gradient(135deg, #79a2ef, #4a7bdc); color: #fff; }
 .today.tone-vacation { background: linear-gradient(135deg, #4fc39b, #2a9a73); color: #fff; }
 .today.tone-off .today-note,
@@ -200,6 +201,8 @@ h1, h2, h3, p { margin: 0; }
   content: ''; position: absolute; bottom: 5px; left: 50%; width: 5px; height: 5px; margin-left: -2.5px;
   border-radius: 50%; background: currentColor; opacity: 0.85;
 }
+.cell .moon { position: absolute; top: 4px; right: 4px; width: 11px; height: 11px; fill: currentColor; stroke: none; opacity: 0.95; }
+.legend-moon { width: 14px; height: 14px; fill: var(--ring); stroke: none; }
 .today-btn { display: block; margin: 8px auto 0; }
 
 .month-sum { display: grid; grid-template-columns: repeat(auto-fit, minmax(70px, 1fr)); gap: 8px; margin: -2px 0 14px; }
@@ -323,6 +326,24 @@ h1, h2, h3, p { margin: 0; }
 .seg input:checked + span { background: var(--card); color: var(--text); box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08); }
 .seg input:focus-visible + span { outline: 2.5px solid var(--ring); }
 
+.seg-kind { margin: 0 0 12px; }
+.seg-kind span { display: flex; flex-direction: column; align-items: center; gap: 0; padding: 8px 6px; }
+.seg-kind span .ico { display: none; }
+.seg small { font-size: 12px; font-weight: 500; opacity: 0.8; }
+.sub-title { display: flex; align-items: center; gap: 6px; font-weight: 700; margin: 4px 0 8px; }
+.sub-title .ico { color: var(--work); }
+.form-card .field-row + .hint + .sub-title { margin-top: 14px; }
+.cyc-field { margin: 16px 0 0; }
+.cyc { display: flex; flex-wrap: wrap; gap: 8px; }
+.cyc-btn {
+  display: grid; justify-items: center; gap: 1px; min-width: 76px; padding: 8px 12px; border-radius: 14px;
+  background: var(--work-soft); color: var(--work);
+}
+.cyc-btn small { font-size: 11px; font-weight: 600; opacity: 0.8; }
+.cyc-btn b { font-size: 14px; }
+.cyc-btn.is-night { background: #3e2f8e; color: #fff; }
+.cyc-btn.is-night .ico { fill: currentColor; stroke: none; }
+
 /* ---------- итоги ---------- */
 .stats { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 .stat { background: var(--off); color: var(--off-ink); border-radius: 16px; padding: 12px 14px; display: grid; }
@@ -330,6 +351,7 @@ h1, h2, h3, p { margin: 0; }
 .stat span { font-size: 13px; opacity: 0.75; }
 .stat-main { background: var(--work); color: #fff; }
 .stat-extra { background: var(--extra-soft); }
+.stat-night { background: #3e2f8e; color: #fff; }
 .stat-money { grid-column: 1 / -1; background: var(--vac-soft); }
 .stats + .link-btn { margin-top: 10px; }
 

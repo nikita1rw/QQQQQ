@@ -1,8 +1,8 @@
 // Экспорт: календарь телефона (.ics), табель (CSV/текст), резервная копия (JSON).
 
 import * as db from './db.js';
-import { addDays, keyOf, MONTHS, fmtDayShort, todayKey, pad, daysInMonth, minutesOf, shiftLength } from './dates.js';
-import { dayInfo, docTypeLabel, STATUSES, monthStats, DEFAULT_SETTINGS } from './schedule.js';
+import { addDays, keyOf, MONTHS, fmtDayShort, todayKey, pad, daysInMonth, minutesOf } from './dates.js';
+import { dayInfo, docTypeLabel, STATUSES, monthStats, migrateSettings, shiftTimes, fmtTime, fmtRange, KINDS } from './schedule.js';
 import { fmtHours, money } from './ui.js';
 
 // ---------- .ics ----------
@@ -29,27 +29,30 @@ export function buildIcs(state, months = 3) {
   const now = stamp();
   const start = todayKey();
   const total = months * 31;
-  const len = shiftLength(s.shiftStart, s.shiftEnd);
-  const overnight = minutesOf(s.shiftEnd) <= minutesOf(s.shiftStart);
-
   for (let i = 0; i < total; i++) {
     const key = addDays(start, i);
     const info = dayInfo(key, s, days);
     if (!info.isShift) continue;
-    const title = info.status === 'extra' ? 'Замена' : 'Смена';
-    const endKey = overnight ? addDays(key, 1) : key;
+    const t = shiftTimes(info.kind, s);
+    const night = info.kind === 'night';
+    const title = `${info.status === 'extra' ? 'Замена' : 'Смена'}${night ? ' (ночь)' : ''}`;
+    const endKey = minutesOf(t.end) <= minutesOf(t.start) ? addDays(key, 1) : key;
+    // дневная — напомнить накануне вечером, ночная — за 3 часа
+    const startMin = minutesOf(t.start);
+    const trigger = night ? '-PT3H' : `-PT${Math.max(1, Math.round((startMin + 180) / 60))}H`;
+    const remind = night ? `Сегодня ночная смена в ${fmtTime(t.start)}` : `Завтра смена в ${fmtTime(t.start)}`;
     lines.push(
       'BEGIN:VEVENT',
       `UID:${key}-shift@smeny`,
       `DTSTAMP:${now}`,
-      `DTSTART:${icsDateTime(key, s.shiftStart)}`,
-      `DTEND:${icsDateTime(endKey, s.shiftEnd)}`,
+      `DTSTART:${icsDateTime(key, t.start)}`,
+      `DTEND:${icsDateTime(endKey, t.end)}`,
       `SUMMARY:${icsEscape(title)}`,
-      `DESCRIPTION:${icsEscape(`${title} ${s.shiftStart}–${s.shiftEnd}, ${fmtHours(info.hours ?? len)}${info.note ? `\n${info.note}` : ''}`)}`,
+      `DESCRIPTION:${icsEscape(`${title} ${fmtRange(info.kind, s)}, ${fmtHours(info.hours)}${info.note ? `\n${info.note}` : ''}`)}`,
       'BEGIN:VALARM',
       'ACTION:DISPLAY',
-      `DESCRIPTION:${icsEscape(`Завтра ${title.toLowerCase()} в ${s.shiftStart}`)}`,
-      'TRIGGER:-PT12H',
+      `DESCRIPTION:${icsEscape(remind)}`,
+      `TRIGGER:${trigger}`,
       'END:VALARM',
       'END:VEVENT',
     );
@@ -85,11 +88,12 @@ export function monthReportText(y, m, state) {
   const out = [`${MONTHS[m]} ${y}`, ''];
   for (const info of st.list) {
     const parts = [fmtDayShort(info.key), '—', STATUSES[info.status].label.toLowerCase()];
+    if (info.kind === 'night') parts.push('(ночь)');
     if (info.isShift) parts.push(`(${fmtHours(info.hours)})`);
     if (info.note) parts.push(`· ${info.note}`);
     out.push(parts.join(' '));
   }
-  out.push('', `Смен: ${st.shifts} (по графику ${st.work}, замен ${st.extra})`, `Часов: ${fmtHours(st.hours)}`);
+  out.push('', `Смен: ${st.shifts} (по графику ${st.work}, замен ${st.extra}${st.night ? `, ночных ${st.night}` : ''})`, `Часов: ${fmtHours(st.hours)}`);
   if (st.sick) out.push(`Больничный: ${st.sick} дн.`);
   if (st.vacation) out.push(`Отпуск: ${st.vacation} дн.`);
   if (st.pay) out.push(`Примерно: ${money(st.pay)}`);
@@ -98,7 +102,7 @@ export function monthReportText(y, m, state) {
 
 export function monthCsv(y, m, state) {
   const { settings: s, days } = state;
-  const rows = [['Дата', 'День', 'Статус', 'Часы', 'Заметка']];
+  const rows = [['Дата', 'День', 'Статус', 'Смена', 'Часы', 'Заметка']];
   const n = daysInMonth(y, m);
   for (let d = 1; d <= n; d++) {
     const key = keyOf(y, m, d);
@@ -108,6 +112,7 @@ export function monthCsv(y, m, state) {
       `${pad(d)}.${pad(m + 1)}.${y}`,
       fmtDayShort(key).split(',')[0],
       STATUSES[info.status].label,
+      info.isShift ? KINDS[info.kind].label : '',
       info.isShift ? String(info.hours).replace('.', ',') : '',
       info.note,
     ]);
@@ -168,7 +173,7 @@ export async function restoreBackup(file) {
   });
   await db.clearAll();
   await db.batch(['kv', 'days', 'docs', 'files'], (st) => {
-    st.kv.put({ ...DEFAULT_SETTINGS, ...(data.settings || {}) }, 'settings');
+    st.kv.put(migrateSettings(data.settings), 'settings');
     st.kv.put(true, 'seeded');
     Object.entries(data.days || {}).forEach(([k, v]) => st.days.put(v, k));
     (data.docs || []).forEach((d) => st.docs.put(d));

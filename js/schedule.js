@@ -4,8 +4,11 @@ export const DEFAULT_SETTINGS = {
   startDate: '2026-10-22', // первый рабочий день
   workDays: 3,
   offDays: 3,
-  shiftStart: '08:00',
-  shiftEnd: '20:00',
+  dayStart: '09:00', // дневная смена
+  dayEnd: '00:00', // 00:00 — до полуночи
+  nightStart: '23:00', // ночная смена
+  nightEnd: '08:00',
+  pattern: ['day', 'day', 'day'], // какая смена в каждый рабочий день цикла
   payType: 'shift', // 'shift' — за смену, 'hour' — за час
   payRate: 0,
   payExtraRate: 0, // 0 — как обычная смена
@@ -27,13 +30,50 @@ export const STATUSES = {
   none: { label: 'До начала работы', legend: '' },
 };
 
-export const hoursPerShift = (s) => shiftLength(s.shiftStart, s.shiftEnd);
+export const KINDS = {
+  day: { label: 'Дневная', short: 'день' },
+  night: { label: 'Ночная', short: 'ночь' },
+};
+
+/** Время смены: { start, end } */
+export const shiftTimes = (kind, s) =>
+  kind === 'night' ? { start: s.nightStart, end: s.nightEnd } : { start: s.dayStart, end: s.dayEnd };
+
+export const hoursFor = (kind, s) => {
+  const t = shiftTimes(kind, s);
+  return shiftLength(t.start, t.end);
+};
+
+/** '09:00' → '9:00'; конец смены '00:00' → '24:00' */
+export function fmtTime(hhmm, isEnd = false) {
+  const [h, m] = String(hhmm || '0:00').split(':');
+  const hour = Number(h);
+  return `${isEnd && hour === 0 && Number(m) === 0 ? 24 : hour}:${m}`;
+}
+
+export const fmtRange = (kind, s) => {
+  const t = shiftTimes(kind, s);
+  return `${fmtTime(t.start)}–${fmtTime(t.end, true)}`;
+};
+
+function cyclePos(key, s) {
+  const diff = dayNum(key) - dayNum(s.startDate);
+  if (diff < 0) return -1;
+  const cycle = Math.max(1, s.workDays + s.offDays);
+  return diff % cycle;
+}
 
 export function baseStatus(key, s) {
-  const diff = dayNum(key) - dayNum(s.startDate);
-  if (diff < 0) return 'none';
-  const cycle = Math.max(1, s.workDays + s.offDays);
-  return diff % cycle < s.workDays ? 'work' : 'off';
+  const pos = cyclePos(key, s);
+  if (pos < 0) return 'none';
+  return pos < s.workDays ? 'work' : 'off';
+}
+
+/** Какая смена по графику в этот день (для замен — дневная) */
+export function baseKind(key, s) {
+  const pos = cyclePos(key, s);
+  if (pos >= 0 && pos < s.workDays) return (s.pattern || [])[pos] === 'night' ? 'night' : 'day';
+  return 'day';
 }
 
 export function dayInfo(key, s, days) {
@@ -41,17 +81,35 @@ export function dayInfo(key, s, days) {
   const rec = days[key] || {};
   const status = rec.status || base;
   const isShift = status === 'work' || status === 'extra';
-  const hours = isShift ? (rec.hours ?? hoursPerShift(s)) : 0;
+  const kind = isShift ? rec.kind || baseKind(key, s) : null;
+  const hours = isShift ? (rec.hours ?? hoursFor(kind, s)) : 0;
   return {
     key,
     base,
     status,
     isShift,
+    kind,
     hours,
     note: rec.note || '',
-    hours_custom: rec.hours != null,
     changed: !!rec.status && rec.status !== base,
   };
+}
+
+/** Старые настройки (одно время смены) → новые */
+export function migrateSettings(saved) {
+  const s = { ...DEFAULT_SETTINGS, ...(saved || {}) };
+  if (saved && saved.shiftStart && !saved.dayStart) {
+    const oldDefault = saved.shiftStart === '08:00' && saved.shiftEnd === '20:00';
+    if (!oldDefault) {
+      s.dayStart = saved.shiftStart;
+      s.dayEnd = saved.shiftEnd;
+    }
+  }
+  delete s.shiftStart;
+  delete s.shiftEnd;
+  const pattern = Array.isArray(s.pattern) ? s.pattern : [];
+  s.pattern = Array.from({ length: s.workDays }, (_, i) => (pattern[i] === 'night' ? 'night' : 'day'));
+  return s;
 }
 
 export function payFor(info, s) {
@@ -62,7 +120,7 @@ export function payFor(info, s) {
 }
 
 export function monthStats(y, m, s, days) {
-  const st = { work: 0, extra: 0, shifts: 0, hours: 0, sick: 0, vacation: 0, pay: 0, list: [] };
+  const st = { work: 0, extra: 0, shifts: 0, night: 0, hours: 0, sick: 0, vacation: 0, pay: 0, list: [] };
   const n = daysInMonth(y, m);
   for (let d = 1; d <= n; d++) {
     const info = dayInfo(keyOf(y, m, d), s, days);
@@ -72,6 +130,7 @@ export function monthStats(y, m, s, days) {
     if (info.status === 'vacation') st.vacation++;
     if (info.isShift) {
       st.shifts++;
+      if (info.kind === 'night') st.night++;
       st.hours += info.hours;
       st.pay += payFor(info, s);
     }

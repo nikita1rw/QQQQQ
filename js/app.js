@@ -3,16 +3,17 @@
 import * as db from './db.js';
 import {
   MONTHS, WD_SHORT, keyOf, parseKey, todayKey, daysInMonth, weekday, shiftMonth, plural,
-  fmtDay, fmtDayLong, fmtDayShort, cap, relDays, diffDays, addDays, shiftLength,
+  fmtDay, fmtDayLong, fmtDayShort, cap, relDays, diffDays, addDays,
 } from './dates.js';
 import {
-  DEFAULT_SETTINGS, SEED_DAYS, STATUSES, dayInfo, baseStatus, monthStats, findNext, runLength, hoursPerShift,
+  DEFAULT_SETTINGS, SEED_DAYS, STATUSES, KINDS, dayInfo, baseStatus, baseKind, monthStats, findNext, runLength,
+  hoursFor, fmtRange, migrateSettings,
 } from './schedule.js';
 import { esc, icon, openSheet, confirmSheet, toast, saveFile, money, fmtHours, copyText } from './ui.js';
 import { renderDocs, docAlerts, alertText, openDoc } from './docs.js';
 import { buildIcs, monthReportText, monthCsv, makeBackup, restoreBackup, backupName, monthFileName } from './exporter.js';
 
-const APP_VERSION = '1.0';
+const APP_VERSION = '1.1';
 
 const state = {
   settings: { ...DEFAULT_SETTINGS },
@@ -37,7 +38,8 @@ async function load() {
     });
   }
   const [settings, days, docs] = await Promise.all([db.get('kv', 'settings'), db.entries('days'), db.getAll('docs')]);
-  state.settings = { ...DEFAULT_SETTINGS, ...(settings || {}) };
+  state.settings = migrateSettings(settings);
+  if (settings && 'shiftStart' in settings) await db.put('kv', state.settings, 'settings');
   state.days = days || {};
   state.docs = docs || [];
 }
@@ -50,6 +52,7 @@ async function saveSettings(patch) {
 async function saveDay(key, rec) {
   const clean = {};
   if (rec.status) clean.status = rec.status;
+  if (rec.kind) clean.kind = rec.kind;
   if (rec.hours != null && rec.hours !== '') clean.hours = rec.hours;
   if (rec.note) clean.note = rec.note;
   if (Object.keys(clean).length) {
@@ -122,15 +125,19 @@ function todayCard() {
     line = `Первая смена — ${fmtDayShort(s.startDate)}, ${relDays(days)}`;
   } else if (info.isShift) {
     const left = runLength(addDays(t, 1), s, state.days, (d) => d.isShift);
-    big = info.status === 'extra' ? 'Замена' : 'Смена';
+    const night = info.kind === 'night';
+    big = info.status === 'extra' ? `Замена${night ? ', ночная' : ''}` : night ? 'Ночная смена' : 'Смена';
+    if (night && info.status !== 'extra') tone = 'night';
     const nextOff = findNext(addDays(t, 1), s, state.days, (d) => !d.isShift);
-    line = `${s.shiftStart}–${s.shiftEnd} · ${left ? `ещё ${left} ${plural(left, 'смена', 'смены', 'смен')} подряд` : 'последняя перед выходными'}`;
+    line = `${fmtRange(info.kind, s)} · ${left ? `ещё ${left} ${plural(left, 'смена', 'смены', 'смен')} подряд` : 'последняя перед выходными'}`;
     if (nextOff && left) line += `, выходные с ${fmtDayShort(nextOff.key)}`;
   } else {
     const next = findNext(addDays(t, 1), s, state.days, (d) => d.isShift);
     big = info.status === 'sick' ? 'Больничный' : info.status === 'vacation' ? 'Отпуск' : 'Выходной';
     if (info.status === 'sick' || info.status === 'vacation') tone = info.status;
-    line = next ? `Следующая смена — ${fmtDayShort(next.key)}, ${relDays(diffDays(t, next.key))}` : '';
+    line = next
+      ? `Следующая ${next.kind === 'night' ? 'смена (ночная)' : 'смена'} — ${fmtDayShort(next.key)}, ${relDays(diffDays(t, next.key))}`
+      : '';
   }
 
   return `
@@ -163,8 +170,9 @@ function monthCard(y, m) {
       info.status === 'off' && info.base === 'work' ? 'was-work' : '',
       info.note ? 'has-note' : '',
     ].filter(Boolean).join(' ');
-    const label = `${fmtDayLong(key)}: ${STATUSES[info.status].label.toLowerCase()}${info.note ? ', есть заметка' : ''}`;
-    cells += `<button class="${cls}" data-day="${key}" aria-label="${esc(label)}">${d}</button>`;
+    const night = info.kind === 'night';
+    const label = `${fmtDayLong(key)}: ${STATUSES[info.status].label.toLowerCase()}${night ? ', ночная' : ''}${info.note ? ', есть заметка' : ''}`;
+    cells += `<button class="${cls}" data-day="${key}" aria-label="${esc(label)}">${d}${night ? icon('moon', 'moon') : ''}</button>`;
   }
 
   return `
@@ -182,6 +190,7 @@ function monthCard(y, m) {
     <div class="month-sum">
       <div><b>${st.work}</b><span>по графику</span></div>
       <div><b>${st.extra}</b><span>${plural(st.extra, 'замена', 'замены', 'замен')}</span></div>
+      ${st.night ? `<div><b>${st.night}</b><span>${plural(st.night, 'ночная', 'ночные', 'ночных')}</span></div>` : ''}
       <div><b>${fmtHours(st.hours)}</b><span>часов</span></div>
       ${st.pay ? `<div><b>${money(st.pay)}</b><span>примерно</span></div>` : ''}
     </div>`;
@@ -212,6 +221,7 @@ function renderSchedule() {
       <span><i class="dot st-work"></i>работа</span>
       <span><i class="dot st-extra"></i>замена</span>
       <span><i class="dot st-off"></i>выходной</span>
+      <span>${icon('moon', 'legend-moon')}ночная</span>
       <span><i class="dot st-sick"></i>больничный</span>
       <span><i class="dot st-vacation"></i>отпуск</span>
     </div>
@@ -273,7 +283,8 @@ function openDay(key) {
   ];
   // «Выходной» в выходной день по графику — то же, что «по графику»
   const current = rec.status && rec.status !== base ? rec.status : '';
-  const defHours = hoursPerShift(s);
+  const defKind = baseKind(key, s);
+  const curKind = rec.kind || defKind;
   let persist = async () => {};
 
   openSheet(
@@ -289,9 +300,15 @@ function openDay(key) {
            <span class="opt-text"><b>${o.label}</b>${o.sub ? `<small>${o.sub}</small>` : ''}</span>
          </label>`).join('')}
      </fieldset>
+     <div class="seg seg-kind" id="kind-field" role="radiogroup" aria-label="Какая смена" ${info.isShift ? '' : 'hidden'}>
+       ${['day', 'night'].map((k) => `
+         <label><input type="radio" name="kind" value="${k}" ${k === curKind ? 'checked' : ''}>
+           <span>${k === 'night' ? icon('moon', 'ico-sm') : icon('sun', 'ico-sm')} ${KINDS[k].label}<small>${fmtRange(k, s)}</small></span>
+         </label>`).join('')}
+     </div>
      <label class="field" id="hours-field" ${info.isShift ? '' : 'hidden'}>
        <span>Часов в этот день</span>
-       <input type="number" name="hours" inputmode="decimal" min="0" max="24" step="0.5" value="${rec.hours ?? ''}" placeholder="${defHours}">
+       <input type="number" name="hours" inputmode="decimal" min="0" max="24" step="0.5" value="${rec.hours ?? ''}" placeholder="${hoursFor(curKind, s)}">
      </label>
      <label class="field">
        <span>Заметка</span>
@@ -302,20 +319,27 @@ function openDay(key) {
       label: fmtDayLong(key),
       onMount: (dlg) => {
         const hoursField = dlg.querySelector('#hours-field');
+        const kindField = dlg.querySelector('#kind-field');
+        const hoursIn = dlg.querySelector('input[name="hours"]');
         persist = async () => {
           const st = dlg.querySelector('input[name="st"]:checked')?.value || '';
-          const hoursRaw = dlg.querySelector('input[name="hours"]').value;
+          const kind = dlg.querySelector('input[name="kind"]:checked')?.value || defKind;
+          const defHours = hoursFor(kind, s);
+          hoursIn.placeholder = defHours;
+          const hoursRaw = hoursIn.value;
           const hours = hoursRaw === '' ? null : Math.max(0, Math.min(24, Number(hoursRaw.replace(',', '.'))));
           const effective = st || base;
           const isShift = effective === 'work' || effective === 'extra';
           hoursField.hidden = !isShift;
+          kindField.hidden = !isShift;
           await saveDay(key, {
             status: st,
+            kind: isShift && kind !== defKind ? kind : null,
             hours: isShift && hours != null && !Number.isNaN(hours) && hours !== defHours ? hours : null,
             note: dlg.querySelector('textarea[name="note"]').value.trim(),
           });
         };
-        dlg.querySelectorAll('input[name="st"]').forEach((r) => r.addEventListener('change', persist));
+        dlg.querySelectorAll('input[name="st"], input[name="kind"]').forEach((r) => r.addEventListener('change', persist));
         dlg.querySelector('input[name="hours"]').addEventListener('change', persist);
         dlg.querySelector('textarea[name="note"]').addEventListener('input', debounce(() => persist(), 400));
       },
@@ -377,6 +401,7 @@ function renderStats() {
         <div class="stat stat-main"><b>${st.shifts}</b><span>${plural(st.shifts, 'смена', 'смены', 'смен')} всего</span></div>
         <div class="stat"><b>${st.work}</b><span>по графику</span></div>
         <div class="stat stat-extra"><b>${st.extra}</b><span>${plural(st.extra, 'замена', 'замены', 'замен')} / вызовов</span></div>
+        ${st.night ? `<div class="stat stat-night"><b>${st.night}</b><span>${plural(st.night, 'ночная', 'ночные', 'ночных')}</span></div>` : ''}
         <div class="stat"><b>${fmtHours(st.hours)}</b><span>отработано</span></div>
         ${st.sick ? `<div class="stat"><b>${st.sick}</b><span>${plural(st.sick, 'день', 'дня', 'дней')} больничного</span></div>` : ''}
         ${st.vacation ? `<div class="stat"><b>${st.vacation}</b><span>${plural(st.vacation, 'день', 'дня', 'дней')} отпуска</span></div>` : ''}
@@ -391,7 +416,7 @@ function renderStats() {
         <li>
           <i class="dot st-${d.status}"></i>
           <span class="tabel-day">${esc(fmtDayShort(d.key))}</span>
-          <span class="tabel-st">${esc(STATUSES[d.status].label)}${d.note ? `<small>${esc(d.note)}</small>` : ''}</span>
+          <span class="tabel-st">${esc(STATUSES[d.status].label)}${d.kind === 'night' ? ' · ночь' : ''}${d.note ? `<small>${esc(d.note)}</small>` : ''}</span>
           <span class="tabel-h">${d.isShift ? fmtHours(d.hours) : ''}</span>
         </li>`).join('')}</ul>` : '<p class="muted">В этом месяце смен нет.</p>'}
       <div class="row-btns">
@@ -460,17 +485,28 @@ function renderSettings() {
           <input type="number" id="offDays" min="1" max="14" inputmode="numeric" value="${s.offDays}">
         </label>
       </div>
-      <div class="field-row">
-        <label class="field">
-          <span>Смена с</span>
-          <input type="time" id="shiftStart" value="${esc(s.shiftStart)}">
-        </label>
-        <label class="field">
-          <span>до</span>
-          <input type="time" id="shiftEnd" value="${esc(s.shiftEnd)}">
-        </label>
+    </section>
+
+    <section class="card form-card">
+      <h2 class="card-title">Смены</h2>
+      ${['day', 'night'].map((k) => `
+        <p class="sub-title">${icon(k === 'night' ? 'moon' : 'sun', 'ico-sm')}${KINDS[k].label}</p>
+        <div class="field-row">
+          <label class="field">
+            <span>с</span>
+            <input type="time" id="${k}Start" value="${esc(s[`${k}Start`])}">
+          </label>
+          <label class="field">
+            <span>до</span>
+            <input type="time" id="${k}End" value="${esc(s[`${k}End`])}">
+          </label>
+        </div>
+        <p class="hint" id="${k}-hint"></p>`).join('')}
+      <div class="field cyc-field">
+        <span>Какие смены в цикле</span>
+        <div class="cyc" id="pattern"></div>
       </div>
-      <p class="hint" id="len-hint">Смена: ${fmtHours(hoursPerShift(s))}${shiftLength(s.shiftStart, s.shiftEnd) === 24 ? ' (сутки)' : ''}</p>
+      <p class="hint">Нажми на рабочий день цикла, чтобы сделать его ночным. Отдельную смену можно поменять прямо в календаре.</p>
     </section>
 
     <section class="card form-card" id="pay">
@@ -540,13 +576,46 @@ function renderSettings() {
     const v = view.querySelector('#startDate').value;
     if (v) await saveSettings({ startDate: v });
   });
-  bind('workDays', async () => { const v = num('workDays', 1, 14); if (v) await saveSettings({ workDays: v }); });
-  bind('offDays', async () => { const v = num('offDays', 1, 14); if (v) await saveSettings({ offDays: v }); });
-  const updLen = () => {
-    view.querySelector('#len-hint').textContent = `Смена: ${fmtHours(hoursPerShift(state.settings))}${hoursPerShift(state.settings) === 24 ? ' (сутки)' : ''}`;
+  const drawPattern = () => {
+    const cur = state.settings;
+    view.querySelector('#pattern').innerHTML = cur.pattern.map((k, i) => `
+      <button type="button" class="cyc-btn ${k === 'night' ? 'is-night' : ''}" data-i="${i}" aria-pressed="${k === 'night'}"
+        aria-label="${i + 1}-й рабочий день: ${KINDS[k].label.toLowerCase()}">
+        ${icon(k === 'night' ? 'moon' : 'sun', 'ico-sm')}<small>смена ${i + 1}</small><b>${KINDS[k].label.toLowerCase()}</b>
+      </button>`).join('');
   };
-  bind('shiftStart', async () => { await saveSettings({ shiftStart: view.querySelector('#shiftStart').value || '08:00' }); updLen(); });
-  bind('shiftEnd', async () => { await saveSettings({ shiftEnd: view.querySelector('#shiftEnd').value || '20:00' }); updLen(); });
+  const updLen = () => {
+    ['day', 'night'].forEach((k) => {
+      const h = hoursFor(k, state.settings);
+      view.querySelector(`#${k}-hint`).textContent = `${fmtRange(k, state.settings)} · ${fmtHours(h)}${h === 24 ? ' (сутки)' : ''}`;
+    });
+  };
+  bind('workDays', async () => {
+    const v = num('workDays', 1, 14);
+    if (!v) return;
+    const pattern = Array.from({ length: v }, (_, i) => state.settings.pattern[i] || 'day');
+    await saveSettings({ workDays: v, pattern });
+    drawPattern();
+  });
+  bind('offDays', async () => { const v = num('offDays', 1, 14); if (v) await saveSettings({ offDays: v }); });
+  ['dayStart', 'dayEnd', 'nightStart', 'nightEnd'].forEach((id) =>
+    bind(id, async () => {
+      const v = view.querySelector(`#${id}`).value;
+      if (v) await saveSettings({ [id]: v });
+      updLen();
+    }));
+  view.querySelector('#pattern').addEventListener('click', async (e) => {
+    const b = e.target.closest('[data-i]');
+    if (!b) return;
+    const pattern = [...state.settings.pattern];
+    const i = Number(b.dataset.i);
+    pattern[i] = pattern[i] === 'night' ? 'day' : 'night';
+    await saveSettings({ pattern });
+    drawPattern();
+    toast(`${i + 1}-й день — ${KINDS[pattern[i]].label.toLowerCase()}`);
+  });
+  drawPattern();
+  updLen();
   view.querySelectorAll('input[name="payType"]').forEach((r) => r.addEventListener('change', async () => {
     await saveSettings({ payType: r.value });
     toast('Сохранено');
